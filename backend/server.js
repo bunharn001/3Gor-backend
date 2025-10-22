@@ -18,10 +18,17 @@ const app = express();
 app.use(express.json());
 
 // Enable CORS
+// Enable CORS for multiple origins
 app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
+  origin: [
+    "http://localhost:3000", // local dev
+    "https://heroic-macaron-256616.netlify.app", // your Netlify site
+    "https://3gorinterior.com" // optional - your custom domain if you link it
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  credentials: true,
 }));
+
 
 // ✅ Serve uploaded images
 
