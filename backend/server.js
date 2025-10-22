@@ -18,16 +18,27 @@ const app = express();
 app.use(express.json());
 
 // Enable CORS
-// Enable CORS for multiple origins
+// Enable CORS for multiple origins dynamically
+const allowedOrigins = [
+  "http://localhost:3000", // local dev
+  "https://heroic-macaron-256616.netlify.app", // Netlify site
+  "https://www.3gorinterior.com", // your GoDaddy domain (www)
+  "https://3gorinterior.com" // your GoDaddy domain (non-www)
+];
+
 app.use(cors({
-  origin: [
-    "http://localhost:3000", // local dev
-    "https://heroic-macaron-256616.netlify.app", // your Netlify site
-    "https://3gorinterior.com" // optional - your custom domain if you link it
-  ],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn("❌ CORS blocked request from:", origin);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   credentials: true,
 }));
+
 
 
 // ✅ Serve uploaded images
