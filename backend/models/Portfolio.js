@@ -5,8 +5,8 @@ const portfolioSchema = new mongoose.Schema(
     category: {
       type: String,
       required: false,
-      default: 'residential',
-      enum: ['residential', 'commercial', 'office'],
+      default: 'kitchen',
+      enum: ['kitchen', 'tv-wall', 'closet'],
     },
     title: {
       type: String,
