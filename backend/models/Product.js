@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 
-// ✅ Define schema
 const productSchema = new mongoose.Schema(
   {
     title: {
@@ -39,7 +38,7 @@ const productSchema = new mongoose.Schema(
       default: '',
     },
     specifications: {
-      type: String, // ✅ <-- key fix
+      type: String, // ✅ final fix: just text
       default: '',
     },
     image: {
@@ -54,6 +53,6 @@ const productSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ Force reload of the Product model to override any cached schema
+// ✅ force mongoose to reload model definition
 delete mongoose.connection.models['Product'];
 module.exports = mongoose.model('Product', productSchema);

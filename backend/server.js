@@ -19,6 +19,12 @@ dotenv.config();
 
 // Connect to MongoDB
 connectDB();
+setTimeout(() => {
+  const Product = require('./models/Product');
+  console.log('🧩 Product schema fields:', Object.keys(Product.schema.paths));
+  console.log('🧱 Type of "specifications" field:', Product.schema.path('specifications').instance);
+}, 3000);
+
 
 // Initialize app
 const app = express();
