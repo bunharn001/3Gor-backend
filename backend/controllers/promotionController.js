@@ -1,5 +1,5 @@
-// controllers/promotionController.js - FIXED VERSION
-const Promotion = require('../models/Promotion'); // Adjust path as needed
+// controllers/promotionController.js - FIXED to use Cloudinary URLs
+const Promotion = require('../models/Promotion');
 
 // Helper function to format promotion data with full URLs
 const formatPromotion = (req, promotion) => {
@@ -13,7 +13,7 @@ const formatPromotion = (req, promotion) => {
   };
 };
 
-// ✅ GET all promotions
+// GET all promotions
 exports.getAllPromotions = async (req, res) => {
   try {
     const promotions = await Promotion.find().sort({ createdAt: -1 });
@@ -25,7 +25,7 @@ exports.getAllPromotions = async (req, res) => {
   }
 };
 
-// ✅ GET promotion by ID
+// GET promotion by ID
 exports.getPromotionById = async (req, res) => {
   try {
     const promotion = await Promotion.findById(req.params.id);
@@ -39,7 +39,7 @@ exports.getPromotionById = async (req, res) => {
   }
 };
 
-// ✅ CREATE promotion
+// CREATE promotion
 exports.createPromotion = async (req, res) => {
   try {
     console.log('📥 Creating promotion with data:', req.body);
@@ -50,14 +50,14 @@ exports.createPromotion = async (req, res) => {
 
     const promotionData = { ...req.body };
 
-    // Handle file uploads
+    // ✅ FIXED: Use full Cloudinary URLs from req.files[].path
     if (req.files?.image?.[0]) {
-      promotionData.image = `/uploads/${req.files.image[0].filename}`;
+      promotionData.image = req.files.image[0].path;
       console.log('🖼️ Added image:', promotionData.image);
     }
     
     if (req.files?.images?.length > 0) {
-      promotionData.images = req.files.images.map(f => `/uploads/${f.filename}`);
+      promotionData.images = req.files.images.map(f => f.path);
       console.log('🖼️ Added images:', promotionData.images);
     }
 
@@ -90,7 +90,7 @@ exports.createPromotion = async (req, res) => {
   }
 };
 
-// ✅ UPDATE promotion - THIS IS THE CRITICAL FIX
+// UPDATE promotion
 exports.updatePromotion = async (req, res) => {
   try {
     const promotion = await Promotion.findById(req.params.id);
@@ -109,11 +109,10 @@ exports.updatePromotion = async (req, res) => {
       currentImages: promotion.images
     });
 
-    // ✅ CRITICAL FIX: Only update image fields if new files are uploaded
-    // This preserves existing images when no new files are selected
+    // ✅ FIXED: Use full Cloudinary URLs from req.files[].path
     if (req.files?.image?.[0]) {
       const oldImage = promotion.image;
-      promotion.image = `/uploads/${req.files.image[0].filename}`;
+      promotion.image = req.files.image[0].path;
       console.log(`🖼️ Updated single image: ${oldImage} → ${promotion.image}`);
     } else {
       console.log('🖼️ Keeping existing single image:', promotion.image);
@@ -121,13 +120,13 @@ exports.updatePromotion = async (req, res) => {
     
     if (req.files?.images?.length > 0) {
       const oldImages = promotion.images;
-      promotion.images = req.files.images.map(f => `/uploads/${f.filename}`);
+      promotion.images = req.files.images.map(f => f.path);
       console.log(`🖼️ Updated multiple images: ${oldImages?.length || 0} → ${promotion.images.length}`);
     } else {
       console.log('🖼️ Keeping existing multiple images:', promotion.images?.length || 0, 'images');
     }
 
-    // ✅ Update other fields (excluding image/images which we handled above)
+    // Update other fields (excluding image/images which we handled above)
     Object.keys(req.body).forEach(key => {
       if (key !== 'image' && key !== 'images') {
         let value = req.body[key];
@@ -165,7 +164,7 @@ exports.updatePromotion = async (req, res) => {
   }
 };
 
-// ✅ DELETE promotion
+// DELETE promotion
 exports.deletePromotion = async (req, res) => {
   try {
     const promotion = await Promotion.findByIdAndDelete(req.params.id);

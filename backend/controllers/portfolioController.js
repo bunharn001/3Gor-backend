@@ -1,5 +1,5 @@
-// controllers/portfolioController.js - FIXED VERSION
-const Portfolio = require('../models/Portfolio'); // Adjust path as needed
+// controllers/portfolioController.js - FIXED to use Cloudinary URLs
+const Portfolio = require('../models/Portfolio');
 
 // Helper function to format portfolio data with full URLs
 const formatPortfolio = (req, portfolio) => {
@@ -13,7 +13,7 @@ const formatPortfolio = (req, portfolio) => {
   };
 };
 
-// ✅ GET all portfolios
+// GET all portfolios
 exports.getAllPortfolios = async (req, res) => {
   try {
     const portfolios = await Portfolio.find().sort({ createdAt: -1 });
@@ -25,7 +25,7 @@ exports.getAllPortfolios = async (req, res) => {
   }
 };
 
-// ✅ GET portfolio by ID
+// GET portfolio by ID
 exports.getPortfolioById = async (req, res) => {
   try {
     const portfolio = await Portfolio.findById(req.params.id);
@@ -39,7 +39,7 @@ exports.getPortfolioById = async (req, res) => {
   }
 };
 
-// ✅ GET portfolios by category
+// GET portfolios by category
 exports.getPortfoliosByCategory = async (req, res) => {
   try {
     const { category } = req.params;
@@ -52,7 +52,7 @@ exports.getPortfoliosByCategory = async (req, res) => {
   }
 };
 
-// ✅ CREATE portfolio
+// CREATE portfolio
 exports.createPortfolio = async (req, res) => {
   try {
     console.log('📥 Creating portfolio with data:', req.body);
@@ -63,14 +63,14 @@ exports.createPortfolio = async (req, res) => {
 
     const portfolioData = { ...req.body };
 
-    // Handle file uploads
+    // ✅ FIXED: Use full Cloudinary URLs from req.files[].path
     if (req.files?.image?.[0]) {
-      portfolioData.image = `/uploads/${req.files.image[0].filename}`;
+      portfolioData.image = req.files.image[0].path;
       console.log('🖼️ Added image:', portfolioData.image);
     }
     
     if (req.files?.images?.length > 0) {
-      portfolioData.images = req.files.images.map(f => `/uploads/${f.filename}`);
+      portfolioData.images = req.files.images.map(f => f.path);
       console.log('🖼️ Added images:', portfolioData.images);
     }
 
@@ -111,7 +111,7 @@ exports.createPortfolio = async (req, res) => {
   }
 };
 
-// ✅ UPDATE portfolio - CRITICAL FIX
+// UPDATE portfolio
 exports.updatePortfolio = async (req, res) => {
   try {
     const portfolio = await Portfolio.findById(req.params.id);
@@ -130,10 +130,10 @@ exports.updatePortfolio = async (req, res) => {
       currentImages: portfolio.images
     });
 
-    // ✅ CRITICAL FIX: Only update image fields if new files are uploaded
+    // ✅ FIXED: Use full Cloudinary URLs from req.files[].path
     if (req.files?.image?.[0]) {
       const oldImage = portfolio.image;
-      portfolio.image = `/uploads/${req.files.image[0].filename}`;
+      portfolio.image = req.files.image[0].path;
       console.log(`🖼️ Updated single image: ${oldImage} → ${portfolio.image}`);
     } else {
       console.log('🖼️ Keeping existing single image:', portfolio.image);
@@ -141,13 +141,13 @@ exports.updatePortfolio = async (req, res) => {
     
     if (req.files?.images?.length > 0) {
       const oldImages = portfolio.images;
-      portfolio.images = req.files.images.map(f => `/uploads/${f.filename}`);
+      portfolio.images = req.files.images.map(f => f.path);
       console.log(`🖼️ Updated multiple images: ${oldImages?.length || 0} → ${portfolio.images.length}`);
     } else {
       console.log('🖼️ Keeping existing multiple images:', portfolio.images?.length || 0, 'images');
     }
 
-    // ✅ Update other fields (excluding image/images which we handled above)
+    // Update other fields (excluding image/images which we handled above)
     Object.keys(req.body).forEach(key => {
       if (key !== 'image' && key !== 'images') {
         let value = req.body[key];
@@ -192,7 +192,7 @@ exports.updatePortfolio = async (req, res) => {
   }
 };
 
-// ✅ DELETE portfolio
+// DELETE portfolio
 exports.deletePortfolio = async (req, res) => {
   try {
     const portfolio = await Portfolio.findByIdAndDelete(req.params.id);

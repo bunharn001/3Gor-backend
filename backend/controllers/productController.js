@@ -1,5 +1,5 @@
-// controllers/productController.js - FIXED VERSION
-const Product = require('../models/Product'); // Adjust path as needed
+// controllers/productController.js - FIXED to use Cloudinary URLs
+const Product = require('../models/Product');
 
 // Helper function to format product data with full URLs
 const formatProduct = (req, product) => {
@@ -13,7 +13,7 @@ const formatProduct = (req, product) => {
   };
 };
 
-// ✅ GET all products
+// GET all products
 exports.getAllProducts = async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
@@ -25,7 +25,7 @@ exports.getAllProducts = async (req, res) => {
   }
 };
 
-// ✅ GET product by ID
+// GET product by ID
 exports.getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -39,7 +39,7 @@ exports.getProductById = async (req, res) => {
   }
 };
 
-// ✅ GET products by category
+// GET products by category
 exports.getProductsByCategory = async (req, res) => {
   try {
     const { category } = req.params;
@@ -52,7 +52,7 @@ exports.getProductsByCategory = async (req, res) => {
   }
 };
 
-// ✅ CREATE product
+// CREATE product
 exports.createProduct = async (req, res) => {
   try {
     console.log('📥 Creating product with data:', req.body);
@@ -63,14 +63,14 @@ exports.createProduct = async (req, res) => {
 
     const productData = { ...req.body };
 
-    // Handle file uploads
+    // ✅ FIXED: Use full Cloudinary URLs from req.files[].path
     if (req.files?.image?.[0]) {
-      productData.image = `/uploads/${req.files.image[0].filename}`;
+      productData.image = req.files.image[0].path;
       console.log('🖼️ Added image:', productData.image);
     }
     
     if (req.files?.images?.length > 0) {
-      productData.images = req.files.images.map(f => `/uploads/${f.filename}`);
+      productData.images = req.files.images.map(f => f.path);
       console.log('🖼️ Added images:', productData.images);
     }
 
@@ -111,7 +111,7 @@ exports.createProduct = async (req, res) => {
   }
 };
 
-// ✅ UPDATE product - CRITICAL FIX
+// UPDATE product
 exports.updateProduct = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -130,10 +130,10 @@ exports.updateProduct = async (req, res) => {
       currentImages: product.images
     });
 
-    // ✅ CRITICAL FIX: Only update image fields if new files are uploaded
+    // ✅ FIXED: Use full Cloudinary URLs from req.files[].path
     if (req.files?.image?.[0]) {
       const oldImage = product.image;
-      product.image = `/uploads/${req.files.image[0].filename}`;
+      product.image = req.files.image[0].path;
       console.log(`🖼️ Updated single image: ${oldImage} → ${product.image}`);
     } else {
       console.log('🖼️ Keeping existing single image:', product.image);
@@ -141,13 +141,13 @@ exports.updateProduct = async (req, res) => {
     
     if (req.files?.images?.length > 0) {
       const oldImages = product.images;
-      product.images = req.files.images.map(f => `/uploads/${f.filename}`);
+      product.images = req.files.images.map(f => f.path);
       console.log(`🖼️ Updated multiple images: ${oldImages?.length || 0} → ${product.images.length}`);
     } else {
       console.log('🖼️ Keeping existing multiple images:', product.images?.length || 0, 'images');
     }
 
-    // ✅ Update other fields (excluding image/images which we handled above)
+    // Update other fields (excluding image/images which we handled above)
     Object.keys(req.body).forEach(key => {
       if (key !== 'image' && key !== 'images') {
         let value = req.body[key];
@@ -192,7 +192,7 @@ exports.updateProduct = async (req, res) => {
   }
 };
 
-// ✅ DELETE product
+// DELETE product
 exports.deleteProduct = async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
