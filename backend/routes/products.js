@@ -6,7 +6,7 @@ const router = express.Router();
 // const upload = require('../config/multer');
 
 // ✅ REPLACE with this:
-const { upload } = require('../config/cloudinary-multer');
+const { upload } = require('../config/multer');
 
 const {
   getAllProducts,
