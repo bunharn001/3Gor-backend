@@ -1,115 +1,89 @@
-// test-cloudinary-connection.js - Test your Cloudinary setup
+// test-cloudinary-in-production.js - Add this route to test Cloudinary on Render
+const express = require('express');
+const router = express.Router();
 const cloudinary = require('cloudinary').v2;
-require('dotenv').config();
 
-console.log('🔧 Testing Cloudinary Connection');
-console.log('================================\n');
-
-// Configure Cloudinary with your credentials
-cloudinary.config({
-  cloud_name: 'dw8lktyqr',
-  api_key: '834787743694456',
-  api_secret: 'yG_UI6V6hJ9VjKh-bk8sBKezNLA',
-});
-
-// Test 1: Basic connection
-async function testConnection() {
+// Test endpoint to verify Cloudinary is working on production
+router.get('/test-cloudinary', async (req, res) => {
   try {
-    console.log('📡 Testing basic connection...');
-    const result = await cloudinary.api.ping();
-    console.log('✅ Connection successful!');
-    console.log('Status:', result.status);
-    return true;
-  } catch (error) {
-    console.error('❌ Connection failed:');
-    console.error(error.message);
-    return false;
-  }
-}
-
-// Test 2: Upload a test image
-async function testUpload() {
-  try {
-    console.log('\n📤 Testing image upload...');
+    console.log('🔧 Testing Cloudinary connection in production...');
     
-    // Upload a simple test image (base64 encoded 1x1 pixel)
-    const testImageData = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    // Check if credentials are set
+    const config = {
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    };
     
-    const result = await cloudinary.uploader.upload(testImageData, {
-      folder: '3gor-interior',
-      public_id: 'test-upload-' + Date.now()
+    console.log('🔍 Environment variables check:', {
+      CLOUDINARY_CLOUD_NAME: config.cloud_name ? '✅ Set' : '❌ Missing',
+      CLOUDINARY_API_KEY: config.api_key ? '✅ Set' : '❌ Missing',
+      CLOUDINARY_API_SECRET: config.api_secret ? '✅ Set' : '❌ Missing',
     });
     
-    console.log('✅ Upload successful!');
-    console.log('📸 Image URL:', result.secure_url);
-    console.log('📁 Public ID:', result.public_id);
+    // Configure Cloudinary
+    cloudinary.config(config);
     
-    // Clean up the test image
-    await cloudinary.uploader.destroy(result.public_id);
+    // Test ping
+    const pingResult = await cloudinary.api.ping();
+    console.log('✅ Cloudinary ping successful:', pingResult);
+    
+    // Test upload with a tiny base64 image
+    const testImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    
+    const uploadResult = await cloudinary.uploader.upload(testImage, {
+      folder: '3gor-interior',
+      public_id: 'production-test-' + Date.now()
+    });
+    
+    console.log('✅ Test upload successful:', uploadResult.secure_url);
+    
+    // Clean up test image
+    await cloudinary.uploader.destroy(uploadResult.public_id);
     console.log('🧹 Test image cleaned up');
     
-    return true;
-  } catch (error) {
-    console.error('❌ Upload test failed:');
-    console.error(error.message);
-    return false;
-  }
-}
-
-// Test 3: Check folder access
-async function testFolderAccess() {
-  try {
-    console.log('\n📁 Testing folder access...');
-    
-    const result = await cloudinary.api.resources({
-      type: 'upload',
-      prefix: '3gor-interior/',
-      max_results: 5
+    res.json({
+      success: true,
+      message: 'Cloudinary is working perfectly in production!',
+      details: {
+        ping: pingResult.status,
+        upload_test: 'successful',
+        test_url: uploadResult.secure_url
+      }
     });
     
-    console.log('✅ Folder access successful!');
-    console.log(`📊 Found ${result.resources.length} existing images in 3gor-interior folder`);
-    
-    if (result.resources.length > 0) {
-      console.log('📋 Recent images:');
-      result.resources.forEach((resource, index) => {
-        console.log(`   ${index + 1}. ${resource.public_id}`);
-      });
-    }
-    
-    return true;
   } catch (error) {
-    console.error('❌ Folder access test failed:');
-    console.error(error.message);
-    return false;
+    console.error('❌ Cloudinary test failed:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Cloudinary test failed',
+      error: {
+        message: error.message,
+        code: error.code,
+        details: error
+      },
+      environment_check: {
+        CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ? 'Set' : 'Missing',
+        CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ? 'Set' : 'Missing',
+        CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? 'Set' : 'Missing',
+      }
+    });
   }
-}
+});
 
-// Run all tests
-async function runAllTests() {
-  console.log('🔍 Running Cloudinary setup verification...\n');
-  
-  const connectionTest = await testConnection();
-  const uploadTest = connectionTest ? await testUpload() : false;
-  const folderTest = connectionTest ? await testFolderAccess() : false;
-  
-  console.log('\n🎯 TEST RESULTS');
-  console.log('===============');
-  console.log(`📡 Connection: ${connectionTest ? '✅ PASS' : '❌ FAIL'}`);
-  console.log(`📤 Upload: ${uploadTest ? '✅ PASS' : '❌ FAIL'}`);
-  console.log(`📁 Folder Access: ${folderTest ? '✅ PASS' : '❌ FAIL'}`);
-  
-  if (connectionTest && uploadTest && folderTest) {
-    console.log('\n🎉 ALL TESTS PASSED!');
-    console.log('✅ Your Cloudinary setup is working perfectly!');
-    console.log('✅ You can now replace your multer config with the Cloudinary version.');
-    console.log('✅ Uploaded images will never disappear again!');
-  } else {
-    console.log('\n⚠️  SOME TESTS FAILED');
-    console.log('❌ Please check your credentials and try again.');
-    console.log('💡 Make sure you added the credentials to your .env file correctly.');
-  }
-}
+module.exports = router;
 
-// Run the tests
-runAllTests().catch(console.error);
+/*
+🔧 HOW TO USE:
+
+1. Add this to your server.js:
+   app.use('/api/test', require('./routes/test-cloudinary'));
+
+2. Visit in browser:
+   https://threegor-1.onrender.com/api/test/test-cloudinary
+
+3. Check the response to see if Cloudinary is configured correctly
+
+This will help diagnose the "undefined" error you're seeing.
+*/
