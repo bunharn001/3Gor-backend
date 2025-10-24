@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+// ✅ Define schema
 const productSchema = new mongoose.Schema(
   {
     title: {
@@ -14,18 +15,15 @@ const productSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      required: false, // ✅ no longer required
-      default: 'kitchen', // ✅ fallback for missing category
-      enum: ['kitchen', 'closet', 'tv-wall'], // ✅ Changed 'wardrobe' to 'closet'
+      default: 'kitchen',
+      enum: ['kitchen', 'closet', 'tv-wall'],
     },
     price: {
       type: Number,
-      required: false,
       default: 0,
     },
     originalPrice: {
       type: Number,
-      required: false,
       default: 0,
     },
     badge: {
@@ -41,13 +39,8 @@ const productSchema = new mongoose.Schema(
       default: '',
     },
     specifications: {
-      type: [
-        {
-          label: String,
-          value: String,
-        },
-      ],
-      default: [],
+      type: String, // ✅ <-- key fix
+      default: '',
     },
     image: {
       type: String,
@@ -61,4 +54,6 @@ const productSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// ✅ Force reload of the Product model to override any cached schema
+delete mongoose.connection.models['Product'];
 module.exports = mongoose.model('Product', productSchema);

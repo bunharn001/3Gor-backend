@@ -62,13 +62,24 @@ const createPortfolio = async (req, res) => {
 
     // 🧠 convert comma-separated fields
     ["features", "materials"].forEach((field) => {
-      if (typeof body[field] === "string") {
-        body[field] = body[field]
-          .split(",")
-          .map((v) => v.trim())
-          .filter(Boolean);
+      if (body[field]) {
+        try {
+          const parsed = JSON.parse(body[field]);
+          body[field] = Array.isArray(parsed)
+            ? parsed
+            : String(body[field])
+              .split(/,|\n/)
+              .map((v) => v.trim())
+              .filter(Boolean);
+        } catch {
+          body[field] = String(body[field])
+            .split(/,|\n/)
+            .map((v) => v.trim())
+            .filter(Boolean);
+        }
       }
     });
+
 
     const portfolio = await Portfolio.create(body);
     res.status(201).json({

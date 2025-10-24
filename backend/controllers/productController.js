@@ -1,41 +1,22 @@
-// backend/controllers/productController.js
 const path = require("path");
-
-let Product;
-try {
-  Product = require("../models/Product");
-} catch (err) {
-  try {
-    Product = require("../models/productModel");
-  } catch (err2) {
-    try {
-      Product = require("../models/Product");
-    } catch (err3) {
-      console.error("❌ Cannot find Product model:", err3.message);
-    }
-  }
-}
+const Product = require("../models/Product");
 
 // ================================
 // 📦 GET ALL PRODUCTS
 // ================================
 const getAllProducts = async (req, res) => {
   try {
-    if (!Product) {
-      return res.status(500).json({
-        success: false,
-        message: "Product model not found.",
-      });
-    }
-
     const { category } = req.query;
     const filter = category ? { category } : {};
     const products = await Product.find(filter).sort({ createdAt: -1 });
-
     res.json({ success: true, count: products.length, data: products });
   } catch (error) {
-    console.error("Get all products error:", error);
-    res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    console.error("❌ Get all products error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
 
@@ -46,137 +27,240 @@ const getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product)
-      return res.status(404).json({ success: false, message: "Product not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     res.json({ success: true, data: product });
   } catch (error) {
-    console.error("Get product by ID error:", error);
-    res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    console.error("❌ Get product by ID error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
 
 // ================================
-// 📦 CREATE PRODUCT (with image uploads)
+// 📦 CREATE PRODUCT
 // ================================
 const createProduct = async (req, res) => {
   try {
-    if (!Product)
-      return res.status(500).json({ success: false, message: "Product model not found" });
-
-    // 🖼️ Handle uploaded images
     let mainImage = "";
     let galleryImages = [];
 
     if (req.files) {
-      if (req.files.image && req.files.image[0]) {
+      if (req.files.image && req.files.image[0])
         mainImage = path.join("uploads", req.files.image[0].filename);
-      }
-      if (req.files.images && req.files.images.length > 0) {
-        galleryImages = req.files.images.map((file) => path.join("uploads", file.filename));
+      if (req.files.images && req.files.images.length > 0)
+        galleryImages = req.files.images.map((file) =>
+          path.join("uploads", file.filename)
+        );
+    }
+
+    // ✅ Parse features (allow plain text or JSON)
+    let features = [];
+    if (req.body.features) {
+      const f = req.body.features;
+      if (typeof f === "string") {
+        try {
+          features = JSON.parse(f);
+        } catch {
+          // Support multi-line Thai input
+          features = f
+            .split(/\r?\n|,/)
+            .map((x) => x.trim())
+            .filter(Boolean);
+        }
+      } else if (Array.isArray(f)) {
+        features = f.map((x) => String(x).trim()).filter(Boolean);
       }
     }
 
-    const productData = {
+    // ✅ Parse specifications (allow plain text or JSON)
+    let specifications = [];
+    if (req.body.specifications) {
+      const s = req.body.specifications;
+      if (typeof s === "string") {
+        try {
+          specifications = JSON.parse(s);
+        } catch {
+          // keep as plain text if long Thai string
+          specifications = [
+            { label: "รายละเอียด", value: s.trim() }
+          ];
+        }
+      } else if (Array.isArray(s)) {
+        specifications = s
+          .map((x) =>
+            typeof x === "object"
+              ? { label: x.label || "", value: x.value || "" }
+              : { label: "รายละเอียด", value: String(x).trim() }
+          )
+          .filter((x) => x.value);
+      }
+    }
+
+    console.log("🧾 Parsed features for create:", features);
+    console.log("🧾 Parsed specifications for create:", specifications);
+
+    const product = await Product.create({
       ...req.body,
       image: mainImage,
       images: galleryImages,
-      features: req.body.features
-        ? Array.isArray(req.body.features)
-          ? req.body.features
-          : req.body.features.split(",").map((f) => f.trim())
-        : [],
-      specifications: req.body.specifications
-        ? typeof req.body.specifications === "string"
-          ? JSON.parse(req.body.specifications)
-          : req.body.specifications
-        : [],
-    };
+      features,
+      specifications,
+    });
 
-    const product = await Product.create(productData);
-    res.status(201).json({ success: true, data: product });
+    res.status(201).json({
+      success: true,
+      data: product,
+      debug: { features, specifications },
+    });
   } catch (error) {
-    console.error("❌ Create product error:", error);
-    res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    console.error("❌ Create product error:");
+    console.error("Message:", error.message);
+    console.error("Name:", error.name);
+    console.error("Path:", error.path || "N/A");
+    console.error("Value:", error.value || "N/A");
+    console.error("Stack:", error.stack.split("\n").slice(0, 5).join("\n"));
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: {
+        message: error.message,
+        name: error.name,
+        path: error.path,
+        value: error.value,
+      },
+    });
   }
 };
 
 // ================================
-// 📦 UPDATE PRODUCT - FIXED VERSION
+// 📦 UPDATE PRODUCT
 // ================================
 const updateProduct = async (req, res) => {
   try {
-    if (!Product)
-      return res.status(500).json({ success: false, message: "Product model not found" });
-
     const existing = await Product.findById(req.params.id);
     if (!existing)
-      return res.status(404).json({ success: false, message: "Product not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
 
-    // ✅ Keep existing images by default
     let mainImage = existing.image;
     let galleryImages = existing.images || [];
 
-    // ✅ ONLY update if new files uploaded
     if (req.files) {
-      if (req.files.image && req.files.image[0]) {
+      if (req.files.image && req.files.image[0])
         mainImage = path.join("uploads", req.files.image[0].filename);
-      }
-      if (req.files.images && req.files.images.length > 0) {
-        galleryImages = req.files.images.map((file) => path.join("uploads", file.filename));
-      }
+      if (req.files.images && req.files.images.length > 0)
+        galleryImages = req.files.images.map((file) =>
+          path.join("uploads", file.filename)
+        );
     }
 
-    // ✅ Parse features and specifications properly
+    // ✅ Features parsing
     let features = existing.features || [];
-    if (req.body.features) {
-      if (typeof req.body.features === 'string') {
+    if (req.body.features !== undefined) {
+      const f = req.body.features;
+      if (!f || f === "[]") features = [];
+      else if (typeof f === "string") {
         try {
-          // Try parsing as JSON first
-          features = JSON.parse(req.body.features);
+          features = JSON.parse(f);
         } catch {
-          // If not JSON, split by comma
-          features = req.body.features.split(",").map((f) => f.trim()).filter(Boolean);
+          features = f
+            .split(/\r?\n|,/)
+            .map((x) => x.trim())
+            .filter(Boolean);
         }
-      } else if (Array.isArray(req.body.features)) {
-        features = req.body.features;
+      } else if (Array.isArray(f)) {
+        features = f.map((x) => String(x).trim()).filter(Boolean);
       }
     }
 
+    // ✅ Specifications parsing
     let specifications = existing.specifications || [];
-    if (req.body.specifications) {
-      if (typeof req.body.specifications === "string") {
+    if (req.body.specifications !== undefined) {
+      const s = req.body.specifications;
+      if (!s || s === "[]") specifications = [];
+      else if (typeof s === "string") {
         try {
-          specifications = JSON.parse(req.body.specifications);
-        } catch (e) {
-          console.error("Failed to parse specifications:", e);
+          specifications = JSON.parse(s);
+        } catch {
+          // if user entered long Thai text -> store as single description
+          specifications = [
+            { label: "รายละเอียด", value: s.trim() }
+          ];
         }
-      } else {
-        specifications = req.body.specifications;
+      } else if (Array.isArray(s)) {
+        specifications = s
+          .map((x) =>
+            typeof x === "object"
+              ? { label: x.label || "", value: x.value || "" }
+              : { label: "รายละเอียด", value: String(x).trim() }
+          )
+          .filter((x) => x.value);
       }
     }
+
+    console.log("🧾 Parsed features for update:", features);
+    console.log("🧾 Parsed specifications for update:", specifications);
 
     const updatedData = {
       ...req.body,
       image: mainImage,
       images: galleryImages,
-      features: features,
-      specifications: specifications,
+      features,
+      specifications,
     };
 
-    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updatedData, {
-      new: true,
-      runValidators: true,
+    const updatedProduct = await Product.findByIdAndUpdate(
+      req.params.id,
+      updatedData,
+      { new: true, runValidators: true }
+    );
+
+    console.log(`✅ Updated product ${req.params.id}`, {
+      featuresCount: updatedProduct.features?.length || 0,
+      specificationsCount: updatedProduct.specifications?.length || 0,
     });
 
-    console.log(`✅ Updated product ${req.params.id}:`, {
-      hasImage: !!updatedProduct.image,
-      imagesCount: updatedProduct.images?.length || 0,
-      featuresCount: updatedProduct.features?.length || 0
+    res.json({
+      success: true,
+      data: updatedProduct,
+      debug: { features, specifications },
     });
-
-    res.json({ success: true, data: updatedProduct });
   } catch (error) {
-    console.error("❌ Update product error:", error);
-    res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    console.error("❌ Update product error:");
+    console.error("Message:", error.message);
+    console.error("Name:", error.name);
+    console.error("Kind:", error.kind || "N/A");
+    console.error("Path:", error.path || "N/A");
+    console.error("Value:", error.value || "N/A");
+    console.error("Stack:", error.stack.split("\n").slice(0, 5).join("\n"));
+
+    if (error.name === "ValidationError") {
+      const fields = Object.keys(error.errors).map(
+        (k) => `${k}: ${error.errors[k].message}`
+      );
+      console.error("⚠️ Validation Errors:", fields);
+      return res
+        .status(400)
+        .json({ success: false, message: "Validation Error", errors: fields });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: {
+        message: error.message,
+        name: error.name,
+        kind: error.kind,
+        path: error.path,
+        value: error.value,
+      },
+    });
   }
 };
 
@@ -187,12 +271,18 @@ const deleteProduct = async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product)
-      return res.status(404).json({ success: false, message: "Product not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
 
     res.json({ success: true, message: "Product deleted successfully" });
   } catch (error) {
-    console.error("Delete product error:", error);
-    res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    console.error("❌ Delete product error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
 
@@ -205,8 +295,12 @@ const getProductsByCategory = async (req, res) => {
     const products = await Product.find({ category }).sort({ createdAt: -1 });
     res.json({ success: true, count: products.length, data: products });
   } catch (error) {
-    console.error("Get products by category error:", error);
-    res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    console.error("❌ Get products by category error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
 
