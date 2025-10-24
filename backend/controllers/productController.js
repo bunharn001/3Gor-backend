@@ -58,7 +58,7 @@ const createProduct = async (req, res) => {
         );
     }
 
-    // ✅ Parse features (allow plain text or JSON)
+    // ✅ Parse features (plain text or JSON)
     let features = [];
     if (req.body.features) {
       const f = req.body.features;
@@ -66,38 +66,34 @@ const createProduct = async (req, res) => {
         try {
           features = JSON.parse(f);
         } catch {
-          // Support multi-line Thai input
-          features = f
-            .split(/\r?\n|,/)
-            .map((x) => x.trim())
-            .filter(Boolean);
+          // support comma or newlines
+          features = f.split(/\r?\n|,/).map((x) => x.trim()).filter(Boolean);
         }
       } else if (Array.isArray(f)) {
         features = f.map((x) => String(x).trim()).filter(Boolean);
       }
     }
 
-    // ✅ Parse specifications (allow plain text or JSON)
-    let specifications = [];
+    // ✅ Parse specifications (plain text, array, or JSON)
+    let specifications = "";
     if (req.body.specifications) {
       const s = req.body.specifications;
       if (typeof s === "string") {
         try {
-          specifications = JSON.parse(s);
+          // try JSON first
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) specifications = parsed.join("\n");
+          else if (typeof parsed === "object")
+            specifications = Object.values(parsed).join("\n");
+          else specifications = String(parsed);
         } catch {
-          // keep as plain text if long Thai string
-          specifications = [
-            { label: "รายละเอียด", value: s.trim() }
-          ];
+          // normal plain text
+          specifications = s.trim();
         }
       } else if (Array.isArray(s)) {
-        specifications = s
-          .map((x) =>
-            typeof x === "object"
-              ? { label: x.label || "", value: x.value || "" }
-              : { label: "รายละเอียด", value: String(x).trim() }
-          )
-          .filter((x) => x.value);
+        specifications = s.map((x) => String(x).trim()).join("\n");
+      } else {
+        specifications = String(s).trim();
       }
     }
 
@@ -109,7 +105,7 @@ const createProduct = async (req, res) => {
       image: mainImage,
       images: galleryImages,
       features,
-      specifications,
+      specifications, // ✅ always a string now
     });
 
     res.status(201).json({
@@ -169,10 +165,7 @@ const updateProduct = async (req, res) => {
         try {
           features = JSON.parse(f);
         } catch {
-          features = f
-            .split(/\r?\n|,/)
-            .map((x) => x.trim())
-            .filter(Boolean);
+          features = f.split(/\r?\n|,/).map((x) => x.trim()).filter(Boolean);
         }
       } else if (Array.isArray(f)) {
         features = f.map((x) => String(x).trim()).filter(Boolean);
@@ -180,27 +173,24 @@ const updateProduct = async (req, res) => {
     }
 
     // ✅ Specifications parsing
-    let specifications = existing.specifications || [];
+    let specifications = existing.specifications || "";
     if (req.body.specifications !== undefined) {
       const s = req.body.specifications;
-      if (!s || s === "[]") specifications = [];
+      if (!s || s === "[]") specifications = "";
       else if (typeof s === "string") {
         try {
-          specifications = JSON.parse(s);
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) specifications = parsed.join("\n");
+          else if (typeof parsed === "object")
+            specifications = Object.values(parsed).join("\n");
+          else specifications = String(parsed);
         } catch {
-          // if user entered long Thai text -> store as single description
-          specifications = [
-            { label: "รายละเอียด", value: s.trim() }
-          ];
+          specifications = s.trim();
         }
       } else if (Array.isArray(s)) {
-        specifications = s
-          .map((x) =>
-            typeof x === "object"
-              ? { label: x.label || "", value: x.value || "" }
-              : { label: "รายละเอียด", value: String(x).trim() }
-          )
-          .filter((x) => x.value);
+        specifications = s.map((x) => String(x).trim()).join("\n");
+      } else {
+        specifications = String(s).trim();
       }
     }
 
@@ -212,7 +202,7 @@ const updateProduct = async (req, res) => {
       image: mainImage,
       images: galleryImages,
       features,
-      specifications,
+      specifications, // ✅ always stored as plain string
     };
 
     const updatedProduct = await Product.findByIdAndUpdate(
@@ -223,7 +213,7 @@ const updateProduct = async (req, res) => {
 
     console.log(`✅ Updated product ${req.params.id}`, {
       featuresCount: updatedProduct.features?.length || 0,
-      specificationsCount: updatedProduct.specifications?.length || 0,
+      specificationsType: typeof updatedProduct.specifications,
     });
 
     res.json({
