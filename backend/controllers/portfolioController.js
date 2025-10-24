@@ -1,191 +1,209 @@
-// backend/controllers/portfolioController.js
-const path = require("path");
-const Portfolio = require("../models/Portfolio");
+// controllers/portfolioController.js - FIXED VERSION
+const Portfolio = require('../models/Portfolio'); // Adjust path as needed
 
-// Helper: format image URLs
-const formatImageUrl = (req, filePath) => {
-  if (!filePath) return "";
-  // ensure consistent path (no double slashes)
-  return `${req.protocol}://${req.get("host")}/${filePath.replace(/^\/+/, "")}`;
+// Helper function to format portfolio data with full URLs
+const formatPortfolio = (req, portfolio) => {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  return {
+    ...portfolio.toObject(),
+    image: portfolio.image ? (portfolio.image.startsWith('http') ? portfolio.image : `${baseUrl}${portfolio.image}`) : null,
+    images: portfolio.images ? portfolio.images.map(img => 
+      img.startsWith('http') ? img : `${baseUrl}${img}`
+    ) : []
+  };
 };
 
-// ================================
-// 📸 GET ALL PORTFOLIOS
-// ================================
-const getAllPortfolios = async (req, res) => {
+// ✅ GET all portfolios
+exports.getAllPortfolios = async (req, res) => {
   try {
     const portfolios = await Portfolio.find().sort({ createdAt: -1 });
-
-    const formatted = portfolios.map((p) => ({
-      ...p._doc,
-      images: p.images?.map((img) => formatImageUrl(req, img)) || [],
-    }));
-
-    res.json({ data: formatted });
-  } catch (error) {
-    console.error("Get all portfolios error:", error);
-    res.status(500).json({ error: error.message });
+    const formattedPortfolios = portfolios.map(portfolio => formatPortfolio(req, portfolio));
+    res.json(formattedPortfolios);
+  } catch (err) {
+    console.error('❌ Get portfolios error:', err);
+    res.status(500).json({ error: err.message });
   }
 };
 
-// ================================
-// 📸 GET PORTFOLIOS BY CATEGORY
-// ================================
-const getPortfoliosByCategory = async (req, res) => {
+// ✅ GET portfolio by ID
+exports.getPortfolioById = async (req, res) => {
+  try {
+    const portfolio = await Portfolio.findById(req.params.id);
+    if (!portfolio) {
+      return res.status(404).json({ error: 'Portfolio not found' });
+    }
+    res.json({ data: formatPortfolio(req, portfolio) });
+  } catch (err) {
+    console.error('❌ Get portfolio error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ✅ GET portfolios by category
+exports.getPortfoliosByCategory = async (req, res) => {
   try {
     const { category } = req.params;
     const portfolios = await Portfolio.find({ category }).sort({ createdAt: -1 });
-
-    const formatted = portfolios.map((p) => ({
-      ...p._doc,
-      images: p.images?.map((img) => formatImageUrl(req, img)) || [],
-    }));
-
-    res.json({ data: formatted });
-  } catch (error) {
-    console.error("Get portfolios by category error:", error);
-    res.status(500).json({ error: error.message });
+    const formattedPortfolios = portfolios.map(portfolio => formatPortfolio(req, portfolio));
+    res.json(formattedPortfolios);
+  } catch (err) {
+    console.error('❌ Get portfolios by category error:', err);
+    res.status(500).json({ error: err.message });
   }
 };
 
-// ================================
-// 📸 CREATE PORTFOLIO
-// ================================
-const createPortfolio = async (req, res) => {
+// ✅ CREATE portfolio
+exports.createPortfolio = async (req, res) => {
   try {
-    // 🖼️ handle uploads
-    const gallery = req.files?.images
-      ? req.files.images.map((f) => path.join("uploads", f.filename))
-      : [];
+    console.log('📥 Creating portfolio with data:', req.body);
+    console.log('📎 Files received:', {
+      image: req.files?.image?.length || 0,
+      images: req.files?.images?.length || 0
+    });
 
-    const body = { ...req.body, images: gallery };
+    const portfolioData = { ...req.body };
 
-    // 🧠 convert comma-separated fields
-    ["features", "materials"].forEach((field) => {
-      if (body[field]) {
+    // Handle file uploads
+    if (req.files?.image?.[0]) {
+      portfolioData.image = `/uploads/${req.files.image[0].filename}`;
+      console.log('🖼️ Added image:', portfolioData.image);
+    }
+    
+    if (req.files?.images?.length > 0) {
+      portfolioData.images = req.files.images.map(f => `/uploads/${f.filename}`);
+      console.log('🖼️ Added images:', portfolioData.images);
+    }
+
+    // Handle JSON strings for arrays (features, materials)
+    ['features', 'materials'].forEach(field => {
+      if (portfolioData[field] && typeof portfolioData[field] === 'string') {
         try {
-          const parsed = JSON.parse(body[field]);
-          body[field] = Array.isArray(parsed)
-            ? parsed
-            : String(body[field])
-              .split(/,|\n/)
-              .map((v) => v.trim())
-              .filter(Boolean);
-        } catch {
-          body[field] = String(body[field])
-            .split(/,|\n/)
-            .map((v) => v.trim())
-            .filter(Boolean);
+          portfolioData[field] = JSON.parse(portfolioData[field]);
+        } catch (e) {
+          // If parsing fails, keep as string
         }
       }
     });
 
-
-    const portfolio = await Portfolio.create(body);
-    res.status(201).json({
-      success: true,
-      data: {
-        ...portfolio._doc,
-        images: gallery.map((img) => formatImageUrl(req, img)),
-      },
+    // Handle other fields
+    Object.keys(portfolioData).forEach(key => {
+      let value = portfolioData[key];
+      
+      // Handle boolean strings
+      if (value === 'true') portfolioData[key] = true;
+      if (value === 'false') portfolioData[key] = false;
+      
+      // Handle numeric strings for year
+      if (key === 'year' && typeof value === 'string') {
+        const numValue = parseInt(value);
+        if (!isNaN(numValue)) portfolioData[key] = numValue;
+      }
     });
-  } catch (error) {
-    console.error("Create portfolio error:", error);
-    res.status(500).json({ error: error.message });
+
+    const portfolio = new Portfolio(portfolioData);
+    await portfolio.save();
+
+    console.log('✅ Created portfolio:', portfolio._id);
+    res.status(201).json({ data: formatPortfolio(req, portfolio) });
+  } catch (err) {
+    console.error('❌ Create portfolio error:', err);
+    res.status(500).json({ error: err.message });
   }
 };
 
-// ================================
-// 📸 UPDATE PORTFOLIO - FIXED VERSION
-// ================================
-const updatePortfolio = async (req, res) => {
+// ✅ UPDATE portfolio - CRITICAL FIX
+exports.updatePortfolio = async (req, res) => {
   try {
     const portfolio = await Portfolio.findById(req.params.id);
-    if (!portfolio) return res.status(404).json({ error: "Not found" });
-
-    // ✅ Keep existing images by default
-    let gallery = portfolio.images || [];
-
-    // ✅ ONLY update if new files uploaded
-    if (req.files?.images && req.files.images.length > 0) {
-      gallery = req.files.images.map((f) => path.join("uploads", f.filename));
+    if (!portfolio) {
+      return res.status(404).json({ error: 'Portfolio not found' });
     }
 
-    // ✅ Parse array fields properly
-    let features = portfolio.features || [];
-    let materials = portfolio.materials || [];
+    console.log('🔄 Updating portfolio:', req.params.id);
+    console.log('📥 Request body:', req.body);
+    console.log('📎 Files received:', {
+      image: req.files?.image?.length || 0,
+      images: req.files?.images?.length || 0
+    });
+    console.log('🖼️ Current images:', {
+      currentImage: portfolio.image,
+      currentImages: portfolio.images
+    });
 
-    if (req.body.features) {
-      if (typeof req.body.features === "string") {
-        try {
-          features = JSON.parse(req.body.features);
-        } catch {
-          features = req.body.features.split(",").map((v) => v.trim()).filter(Boolean);
+    // ✅ CRITICAL FIX: Only update image fields if new files are uploaded
+    if (req.files?.image?.[0]) {
+      const oldImage = portfolio.image;
+      portfolio.image = `/uploads/${req.files.image[0].filename}`;
+      console.log(`🖼️ Updated single image: ${oldImage} → ${portfolio.image}`);
+    } else {
+      console.log('🖼️ Keeping existing single image:', portfolio.image);
+    }
+    
+    if (req.files?.images?.length > 0) {
+      const oldImages = portfolio.images;
+      portfolio.images = req.files.images.map(f => `/uploads/${f.filename}`);
+      console.log(`🖼️ Updated multiple images: ${oldImages?.length || 0} → ${portfolio.images.length}`);
+    } else {
+      console.log('🖼️ Keeping existing multiple images:', portfolio.images?.length || 0, 'images');
+    }
+
+    // ✅ Update other fields (excluding image/images which we handled above)
+    Object.keys(req.body).forEach(key => {
+      if (key !== 'image' && key !== 'images') {
+        let value = req.body[key];
+        
+        // Handle JSON strings for arrays
+        if (['features', 'materials'].includes(key) && 
+            typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+          try {
+            value = JSON.parse(value);
+          } catch (e) {
+            // If parsing fails, keep as string
+          }
         }
-      } else if (Array.isArray(req.body.features)) {
-        features = req.body.features;
-      }
-    }
-
-    if (req.body.materials) {
-      if (typeof req.body.materials === "string") {
-        try {
-          materials = JSON.parse(req.body.materials);
-        } catch {
-          materials = req.body.materials.split(",").map((v) => v.trim()).filter(Boolean);
+        
+        // Handle boolean strings
+        if (value === 'true') value = true;
+        if (value === 'false') value = false;
+        
+        // Handle numeric strings for year
+        if (key === 'year' && typeof value === 'string') {
+          const numValue = parseInt(value);
+          if (!isNaN(numValue)) value = numValue;
         }
-      } else if (Array.isArray(req.body.materials)) {
-        materials = req.body.materials;
+        
+        portfolio[key] = value;
+        console.log(`📝 Updated field ${key}:`, value);
       }
-    }
-
-    // ✅ Update portfolio
-    Object.assign(portfolio, {
-      ...req.body,
-      images: gallery,
-      features: features,
-      materials: materials,
     });
 
     await portfolio.save();
-
-    console.log(`✅ Updated portfolio ${req.params.id}:`, {
-      imagesCount: gallery.length,
-      featuresCount: features.length,
-      materialsCount: materials.length
+    
+    console.log(`✅ Successfully updated portfolio ${req.params.id}`);
+    console.log('🖼️ Final images:', {
+      finalImage: portfolio.image,
+      finalImages: portfolio.images
     });
 
-    res.json({
-      success: true,
-      data: {
-        ...portfolio._doc,
-        images: gallery.map((img) => formatImageUrl(req, img)),
-      },
-    });
-  } catch (error) {
-    console.error("❌ Update portfolio error:", error);
-    res.status(500).json({ error: error.message });
+    res.json({ data: formatPortfolio(req, portfolio) });
+  } catch (err) {
+    console.error('❌ Update portfolio error:', err);
+    res.status(500).json({ error: err.message });
   }
 };
 
-// ================================
-// 🗑️ DELETE PORTFOLIO
-// ================================
-const deletePortfolio = async (req, res) => {
+// ✅ DELETE portfolio
+exports.deletePortfolio = async (req, res) => {
   try {
-    const deleted = await Portfolio.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ error: "Not found" });
-    res.json({ message: "Deleted successfully" });
-  } catch (error) {
-    console.error("Delete portfolio error:", error);
-    res.status(500).json({ error: error.message });
+    const portfolio = await Portfolio.findByIdAndDelete(req.params.id);
+    if (!portfolio) {
+      return res.status(404).json({ error: 'Portfolio not found' });
+    }
+    
+    console.log('🗑️ Deleted portfolio:', req.params.id);
+    res.json({ message: 'Portfolio deleted successfully' });
+  } catch (err) {
+    console.error('❌ Delete portfolio error:', err);
+    res.status(500).json({ error: err.message });
   }
-};
-
-module.exports = {
-  getAllPortfolios,
-  getPortfoliosByCategory,
-  createPortfolio,
-  updatePortfolio,
-  deletePortfolio,
 };

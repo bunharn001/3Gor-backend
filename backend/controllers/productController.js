@@ -1,313 +1,209 @@
-const path = require("path");
-const Product = require("../models/Product");
+// controllers/productController.js - FIXED VERSION
+const Product = require('../models/Product'); // Adjust path as needed
 
-// ================================
-// 📦 GET ALL PRODUCTS
-// ================================
-const getAllProducts = async (req, res) => {
+// Helper function to format product data with full URLs
+const formatProduct = (req, product) => {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  return {
+    ...product.toObject(),
+    image: product.image ? (product.image.startsWith('http') ? product.image : `${baseUrl}${product.image}`) : null,
+    images: product.images ? product.images.map(img => 
+      img.startsWith('http') ? img : `${baseUrl}${img}`
+    ) : []
+  };
+};
+
+// ✅ GET all products
+exports.getAllProducts = async (req, res) => {
   try {
-    const { category } = req.query;
-    const filter = category ? { category } : {};
-    const products = await Product.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, count: products.length, data: products });
-  } catch (error) {
-    console.error("❌ Get all products error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: error.message,
-    });
+    const products = await Product.find().sort({ createdAt: -1 });
+    const formattedProducts = products.map(product => formatProduct(req, product));
+    res.json(formattedProducts);
+  } catch (err) {
+    console.error('❌ Get products error:', err);
+    res.status(500).json({ error: err.message });
   }
 };
 
-// ================================
-// 📦 GET SINGLE PRODUCT
-// ================================
-const getProductById = async (req, res) => {
+// ✅ GET product by ID
+exports.getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
-    if (!product)
-      return res
-        .status(404)
-        .json({ success: false, message: "Product not found" });
-    res.json({ success: true, data: product });
-  } catch (error) {
-    console.error("❌ Get product by ID error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: error.message,
-    });
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    res.json({ data: formatProduct(req, product) });
+  } catch (err) {
+    console.error('❌ Get product error:', err);
+    res.status(500).json({ error: err.message });
   }
 };
 
-// ================================
-// 📦 CREATE PRODUCT
-// ================================
-const createProduct = async (req, res) => {
-  try {
-    let mainImage = "";
-    let galleryImages = [];
-
-    if (req.files) {
-      if (req.files.image && req.files.image[0])
-        mainImage = path.join("uploads", req.files.image[0].filename);
-      if (req.files.images && req.files.images.length > 0)
-        galleryImages = req.files.images.map((file) =>
-          path.join("uploads", file.filename)
-        );
-    }
-
-    // ✅ Parse features
-    let features = [];
-    if (req.body.features) {
-      const f = req.body.features;
-      if (typeof f === "string") {
-        try {
-          features = JSON.parse(f);
-        } catch {
-          features = f.split(/\r?\n|,/).map((x) => x.trim()).filter(Boolean);
-        }
-      } else if (Array.isArray(f)) {
-        features = f.map((x) => String(x).trim()).filter(Boolean);
-      }
-    }
-
-    // ✅ Parse specifications
-    let specifications = "";
-    if (req.body.specifications) {
-      const s = req.body.specifications;
-      if (typeof s === "string") {
-        try {
-          const parsed = JSON.parse(s);
-          if (Array.isArray(parsed)) specifications = parsed.join("\n");
-          else if (typeof parsed === "object")
-            specifications = Object.values(parsed).join("\n");
-          else specifications = String(parsed);
-        } catch {
-          specifications = s.trim();
-        }
-      } else if (Array.isArray(s)) {
-        specifications = s.map((x) => String(x).trim()).join("\n");
-      } else {
-        specifications = String(s).trim();
-      }
-    }
-
-    // ✅ FIX: ensure string before saving
-    if (Array.isArray(specifications)) {
-      specifications = specifications.join("\n");
-      console.log("🧩 Joined specifications before create:", specifications);
-    }
-
-    console.log("🧾 Parsed features for create:", features);
-    console.log("🧾 Parsed specifications for create:", specifications);
-
-    const product = await Product.create({
-      ...req.body,
-      image: mainImage,
-      images: galleryImages,
-      features,
-      specifications,
-    });
-
-    res.status(201).json({
-      success: true,
-      data: product,
-      debug: { features, specifications },
-    });
-  } catch (error) {
-    console.error("❌ Create product error:");
-    console.error("Message:", error.message);
-    console.error("Name:", error.name);
-    console.error("Path:", error.path || "N/A");
-    console.error("Value:", error.value || "N/A");
-    console.error("Stack:", error.stack.split("\n").slice(0, 5).join("\n"));
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: {
-        message: error.message,
-        name: error.name,
-        path: error.path,
-        value: error.value,
-      },
-    });
-  }
-};
-
-// ================================
-// 📦 UPDATE PRODUCT
-// ================================
-const updateProduct = async (req, res) => {
-  try {
-    const existing = await Product.findById(req.params.id);
-    if (!existing)
-      return res
-        .status(404)
-        .json({ success: false, message: "Product not found" });
-
-    let mainImage = existing.image;
-    let galleryImages = existing.images || [];
-
-    if (req.files) {
-      if (req.files.image && req.files.image[0])
-        mainImage = path.join("uploads", req.files.image[0].filename);
-      if (req.files.images && req.files.images.length > 0)
-        galleryImages = req.files.images.map((file) =>
-          path.join("uploads", file.filename)
-        );
-    }
-
-    // ✅ Features parsing
-    let features = existing.features || [];
-    if (req.body.features !== undefined) {
-      const f = req.body.features;
-      if (!f || f === "[]") features = [];
-      else if (typeof f === "string") {
-        try {
-          features = JSON.parse(f);
-        } catch {
-          features = f.split(/\r?\n|,/).map((x) => x.trim()).filter(Boolean);
-        }
-      } else if (Array.isArray(f)) {
-        features = f.map((x) => String(x).trim()).filter(Boolean);
-      }
-    }
-
-    // ✅ Specifications parsing
-    let specifications = existing.specifications || "";
-    if (req.body.specifications !== undefined) {
-      const s = req.body.specifications;
-      if (!s || s === "[]") specifications = "";
-      else if (typeof s === "string") {
-        try {
-          const parsed = JSON.parse(s);
-          if (Array.isArray(parsed)) specifications = parsed.join("\n");
-          else if (typeof parsed === "object")
-            specifications = Object.values(parsed).join("\n");
-          else specifications = String(parsed);
-        } catch {
-          specifications = s.trim();
-        }
-      } else if (Array.isArray(s)) {
-        specifications = s.map((x) => String(x).trim()).join("\n");
-      } else {
-        specifications = String(s).trim();
-      }
-    }
-
-    // ✅ FIX: ensure string before saving
-    if (Array.isArray(specifications)) {
-      specifications = specifications.join("\n");
-      console.log("🧩 Joined specifications before save:", specifications);
-    }
-
-    console.log("🧾 Parsed features for update:", features);
-    console.log("🧾 Parsed specifications for update:", specifications);
-
-    const updatedData = {
-      ...req.body,
-      image: mainImage,
-      images: galleryImages,
-      features,
-      specifications,
-    };
-
-    const updatedProduct = await Product.findByIdAndUpdate(
-      req.params.id,
-      updatedData,
-      { new: true, runValidators: true }
-    );
-
-    console.log(`✅ Updated product ${req.params.id}`, {
-      featuresCount: updatedProduct.features?.length || 0,
-      specificationsType: typeof updatedProduct.specifications,
-    });
-
-    res.json({
-      success: true,
-      data: updatedProduct,
-      debug: { features, specifications },
-    });
-  } catch (error) {
-    console.error("❌ Update product error:");
-    console.error("Message:", error.message);
-    console.error("Name:", error.name);
-    console.error("Kind:", error.kind || "N/A");
-    console.error("Path:", error.path || "N/A");
-    console.error("Value:", error.value || "N/A");
-    console.error("Stack:", error.stack.split("\n").slice(0, 5).join("\n"));
-
-    if (error.name === "ValidationError") {
-      const fields = Object.keys(error.errors).map(
-        (k) => `${k}: ${error.errors[k].message}`
-      );
-      console.error("⚠️ Validation Errors:", fields);
-      return res
-        .status(400)
-        .json({ success: false, message: "Validation Error", errors: fields });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: {
-        message: error.message,
-        name: error.name,
-        kind: error.kind,
-        path: error.path,
-        value: error.value,
-      },
-    });
-  }
-};
-
-// ================================
-// 📦 DELETE PRODUCT
-// ================================
-const deleteProduct = async (req, res) => {
-  try {
-    const product = await Product.findByIdAndDelete(req.params.id);
-    if (!product)
-      return res
-        .status(404)
-        .json({ success: false, message: "Product not found" });
-
-    res.json({ success: true, message: "Product deleted successfully" });
-  } catch (error) {
-    console.error("❌ Delete product error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: error.message,
-    });
-  }
-};
-
-// ================================
-// 📦 GET PRODUCTS BY CATEGORY
-// ================================
-const getProductsByCategory = async (req, res) => {
+// ✅ GET products by category
+exports.getProductsByCategory = async (req, res) => {
   try {
     const { category } = req.params;
     const products = await Product.find({ category }).sort({ createdAt: -1 });
-    res.json({ success: true, count: products.length, data: products });
-  } catch (error) {
-    console.error("❌ Get products by category error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: error.message,
-    });
+    const formattedProducts = products.map(product => formatProduct(req, product));
+    res.json(formattedProducts);
+  } catch (err) {
+    console.error('❌ Get products by category error:', err);
+    res.status(500).json({ error: err.message });
   }
 };
 
-module.exports = {
-  getAllProducts,
-  getProductById,
-  createProduct,
-  updateProduct,
-  deleteProduct,
-  getProductsByCategory,
+// ✅ CREATE product
+exports.createProduct = async (req, res) => {
+  try {
+    console.log('📥 Creating product with data:', req.body);
+    console.log('📎 Files received:', {
+      image: req.files?.image?.length || 0,
+      images: req.files?.images?.length || 0
+    });
+
+    const productData = { ...req.body };
+
+    // Handle file uploads
+    if (req.files?.image?.[0]) {
+      productData.image = `/uploads/${req.files.image[0].filename}`;
+      console.log('🖼️ Added image:', productData.image);
+    }
+    
+    if (req.files?.images?.length > 0) {
+      productData.images = req.files.images.map(f => `/uploads/${f.filename}`);
+      console.log('🖼️ Added images:', productData.images);
+    }
+
+    // Handle JSON strings for arrays (features, detailedFeatures, specifications)
+    ['features', 'detailedFeatures', 'specifications'].forEach(field => {
+      if (productData[field] && typeof productData[field] === 'string') {
+        try {
+          productData[field] = JSON.parse(productData[field]);
+        } catch (e) {
+          // If parsing fails, keep as string
+        }
+      }
+    });
+
+    // Handle other fields
+    Object.keys(productData).forEach(key => {
+      let value = productData[key];
+      
+      // Handle boolean strings
+      if (value === 'true') productData[key] = true;
+      if (value === 'false') productData[key] = false;
+      
+      // Handle numeric strings
+      if (key === 'price' && typeof value === 'string') {
+        const numValue = parseFloat(value);
+        if (!isNaN(numValue)) productData[key] = numValue;
+      }
+    });
+
+    const product = new Product(productData);
+    await product.save();
+
+    console.log('✅ Created product:', product._id);
+    res.status(201).json({ data: formatProduct(req, product) });
+  } catch (err) {
+    console.error('❌ Create product error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ✅ UPDATE product - CRITICAL FIX
+exports.updateProduct = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    console.log('🔄 Updating product:', req.params.id);
+    console.log('📥 Request body:', req.body);
+    console.log('📎 Files received:', {
+      image: req.files?.image?.length || 0,
+      images: req.files?.images?.length || 0
+    });
+    console.log('🖼️ Current images:', {
+      currentImage: product.image,
+      currentImages: product.images
+    });
+
+    // ✅ CRITICAL FIX: Only update image fields if new files are uploaded
+    if (req.files?.image?.[0]) {
+      const oldImage = product.image;
+      product.image = `/uploads/${req.files.image[0].filename}`;
+      console.log(`🖼️ Updated single image: ${oldImage} → ${product.image}`);
+    } else {
+      console.log('🖼️ Keeping existing single image:', product.image);
+    }
+    
+    if (req.files?.images?.length > 0) {
+      const oldImages = product.images;
+      product.images = req.files.images.map(f => `/uploads/${f.filename}`);
+      console.log(`🖼️ Updated multiple images: ${oldImages?.length || 0} → ${product.images.length}`);
+    } else {
+      console.log('🖼️ Keeping existing multiple images:', product.images?.length || 0, 'images');
+    }
+
+    // ✅ Update other fields (excluding image/images which we handled above)
+    Object.keys(req.body).forEach(key => {
+      if (key !== 'image' && key !== 'images') {
+        let value = req.body[key];
+        
+        // Handle JSON strings for arrays
+        if (['features', 'detailedFeatures', 'specifications'].includes(key) && 
+            typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+          try {
+            value = JSON.parse(value);
+          } catch (e) {
+            // If parsing fails, keep as string
+          }
+        }
+        
+        // Handle boolean strings
+        if (value === 'true') value = true;
+        if (value === 'false') value = false;
+        
+        // Handle numeric strings for price
+        if (key === 'price' && typeof value === 'string') {
+          const numValue = parseFloat(value);
+          if (!isNaN(numValue)) value = numValue;
+        }
+        
+        product[key] = value;
+        console.log(`📝 Updated field ${key}:`, value);
+      }
+    });
+
+    await product.save();
+    
+    console.log(`✅ Successfully updated product ${req.params.id}`);
+    console.log('🖼️ Final images:', {
+      finalImage: product.image,
+      finalImages: product.images
+    });
+
+    res.json({ data: formatProduct(req, product) });
+  } catch (err) {
+    console.error('❌ Update product error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ✅ DELETE product
+exports.deleteProduct = async (req, res) => {
+  try {
+    const product = await Product.findByIdAndDelete(req.params.id);
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    
+    console.log('🗑️ Deleted product:', req.params.id);
+    res.json({ message: 'Product deleted successfully' });
+  } catch (err) {
+    console.error('❌ Delete product error:', err);
+    res.status(500).json({ error: err.message });
+  }
 };
