@@ -16,7 +16,7 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: false, // ✅ no longer required
       default: 'kitchen', // ✅ fallback for missing category
-      enum: ['kitchen', 'wardrobe', 'tv-wall'], // optional, but good for data consistency
+      enum: ['kitchen', 'closet', 'tv-wall'], // ✅ Changed 'wardrobe' to 'closet'
     },
     price: {
       type: Number,
