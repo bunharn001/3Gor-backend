@@ -58,7 +58,7 @@ const createProduct = async (req, res) => {
         );
     }
 
-    // ✅ Parse features (plain text or JSON)
+    // ✅ Parse features
     let features = [];
     if (req.body.features) {
       const f = req.body.features;
@@ -66,7 +66,6 @@ const createProduct = async (req, res) => {
         try {
           features = JSON.parse(f);
         } catch {
-          // support comma or newlines
           features = f.split(/\r?\n|,/).map((x) => x.trim()).filter(Boolean);
         }
       } else if (Array.isArray(f)) {
@@ -74,20 +73,18 @@ const createProduct = async (req, res) => {
       }
     }
 
-    // ✅ Parse specifications (plain text, array, or JSON)
+    // ✅ Parse specifications
     let specifications = "";
     if (req.body.specifications) {
       const s = req.body.specifications;
       if (typeof s === "string") {
         try {
-          // try JSON first
           const parsed = JSON.parse(s);
           if (Array.isArray(parsed)) specifications = parsed.join("\n");
           else if (typeof parsed === "object")
             specifications = Object.values(parsed).join("\n");
           else specifications = String(parsed);
         } catch {
-          // normal plain text
           specifications = s.trim();
         }
       } else if (Array.isArray(s)) {
@@ -95,6 +92,12 @@ const createProduct = async (req, res) => {
       } else {
         specifications = String(s).trim();
       }
+    }
+
+    // ✅ FIX: ensure string before saving
+    if (Array.isArray(specifications)) {
+      specifications = specifications.join("\n");
+      console.log("🧩 Joined specifications before create:", specifications);
     }
 
     console.log("🧾 Parsed features for create:", features);
@@ -105,7 +108,7 @@ const createProduct = async (req, res) => {
       image: mainImage,
       images: galleryImages,
       features,
-      specifications, // ✅ always a string now
+      specifications,
     });
 
     res.status(201).json({
@@ -194,6 +197,12 @@ const updateProduct = async (req, res) => {
       }
     }
 
+    // ✅ FIX: ensure string before saving
+    if (Array.isArray(specifications)) {
+      specifications = specifications.join("\n");
+      console.log("🧩 Joined specifications before save:", specifications);
+    }
+
     console.log("🧾 Parsed features for update:", features);
     console.log("🧾 Parsed specifications for update:", specifications);
 
@@ -202,7 +211,7 @@ const updateProduct = async (req, res) => {
       image: mainImage,
       images: galleryImages,
       features,
-      specifications, // ✅ always stored as plain string
+      specifications,
     };
 
     const updatedProduct = await Product.findByIdAndUpdate(
