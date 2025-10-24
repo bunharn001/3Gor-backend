@@ -1,20 +1,29 @@
+// routes/products.js - FIXED VERSION for your exact code
 const express = require('express');
 const router = express.Router();
-const upload = require('../config/multer');
+
+// ❌ REMOVE this line:
+// const upload = require('../config/multer');
+
+// ✅ REPLACE with this:
+const { upload } = require('../config/cloudinary-multer');
+
 const {
   getAllProducts,
   getProductById,
   createProduct,
   updateProduct,
   deleteProduct,
-  getProductsByCategory, // ✅ new controller
+  getProductsByCategory,
 } = require('../controllers/productController');
 
-// ✅ new route must come before '/:id'
+// ✅ Routes stay exactly the same - just the upload source changes
 router.get('/category/:category', getProductsByCategory);
 
 router.get('/', getAllProducts);
 router.get('/:id', getProductById);
+
+// ✅ This upload.fields() will now use Cloudinary instead of local storage
 router.post(
   '/',
   upload.fields([
@@ -23,6 +32,7 @@ router.post(
   ]),
   createProduct
 );
+
 router.put(
   '/:id',
   upload.fields([
@@ -31,6 +41,7 @@ router.put(
   ]),
   updateProduct
 );
+
 router.delete('/:id', deleteProduct);
 
 module.exports = router;

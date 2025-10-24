@@ -1,4 +1,4 @@
-// config/cloudinary-multer.js - Replace your existing multer config with this
+// config/cloudinary-multer.js - UPDATED to work with your existing routes
 const multer = require("multer");
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
@@ -64,13 +64,18 @@ const uploadWithCloudinaryLogging = (fieldName, maxCount = 1) => {
         console.log(`🌟 SUCCESS: ${req.file.originalname} uploaded to Cloudinary!`);
         console.log(`🔗 URL: ${req.file.path}`);
         console.log(`📁 Public ID: ${req.file.filename}`);
-        console.log(`📊 Size: ${req.file.size || 'optimized'} bytes`);
       }
 
-      if (req.files && req.files.length > 0) {
-        console.log(`🌟 SUCCESS: ${req.files.length} files uploaded to Cloudinary!`);
-        req.files.forEach((file, index) => {
-          console.log(`   ${index + 1}. ${file.originalname} -> ${file.path}`);
+      if (req.files) {
+        // Handle upload.fields() case
+        Object.keys(req.files).forEach(fieldName => {
+          const files = req.files[fieldName];
+          if (files && files.length > 0) {
+            console.log(`🌟 SUCCESS: ${files.length} files uploaded to Cloudinary for field '${fieldName}'!`);
+            files.forEach((file, index) => {
+              console.log(`   ${index + 1}. ${file.originalname} -> ${file.path}`);
+            });
+          }
         });
       }
 
@@ -79,51 +84,34 @@ const uploadWithCloudinaryLogging = (fieldName, maxCount = 1) => {
   };
 };
 
-// Export both the basic upload and the enhanced version
+// Export both the basic upload (for your existing routes) and the enhanced version
 module.exports = {
-  upload,
+  upload,              // ✅ This works with your upload.fields() syntax
   uploadWithCloudinaryLogging,
   cloudinary
 };
 
 /* 
-🔧 HOW TO USE THIS:
+🔧 HOW THIS WORKS WITH YOUR EXISTING CODE:
 
-1. Replace your existing config/multer.js with this file
+Your current route:
+router.post('/',
+  upload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'images', maxCount: 10 },
+  ]),
+  createProduct
+);
 
-2. Add these to your .env file:
-   CLOUDINARY_CLOUD_NAME=your_cloud_name
-   CLOUDINARY_API_KEY=your_api_key  
-   CLOUDINARY_API_SECRET=your_api_secret
+After the fix:
+- upload.fields() now uses Cloudinary storage instead of local storage
+- req.files.image[0].path = Cloudinary URL (instead of local path)
+- req.files.images[].path = Array of Cloudinary URLs (instead of local paths)
+- Your controller code doesn't need to change!
 
-3. Install required packages:
-   npm install cloudinary multer-storage-cloudinary
-
-4. Update your route files:
-   
-   OLD:
-   const upload = require('../config/multer');
-   
-   NEW:
-   const { uploadWithCloudinaryLogging } = require('../config/cloudinary-multer');
-   
-5. Update your route handlers:
-   
-   OLD:
-   router.post('/upload', upload.single('image'), (req, res) => {
-     // req.file.path was a local path that disappears
-   });
-   
-   NEW:
-   router.post('/upload', uploadWithCloudinaryLogging('image'), (req, res) => {
-     // req.file.path is now a permanent Cloudinary URL!
-   });
-
-6. Your database will automatically store Cloudinary URLs instead of local paths:
-   Before: "/uploads/image-1234567890.jpg" ❌ (disappears)
-   After:  "https://res.cloudinary.com/your-cloud/image/upload/v1234/3gor-interior/abc123.jpg" ✅ (permanent)
-
-7. No frontend changes needed! Your frontend will receive the new URLs automatically.
-
-🎯 RESULT: Your uploaded images will NEVER disappear again!
+🎯 RESULT: 
+- Files go to Cloudinary (permanent)
+- Your existing route structure stays the same
+- No controller changes needed
+- 404 errors disappear forever!
 */
