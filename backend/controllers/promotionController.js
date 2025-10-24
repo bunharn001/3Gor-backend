@@ -58,12 +58,12 @@ exports.createPromotion = async (req, res) => {
   }
 };
 
-// ✅ UPDATE promotion
 exports.updatePromotion = async (req, res) => {
   try {
     const promotion = await Promotion.findById(req.params.id);
     if (!promotion) return res.status(404).json({ error: 'Not found' });
 
+    // ✅ ONLY update if new files uploaded
     if (req.files?.image?.[0]) {
       promotion.image = `/uploads/${req.files.image[0].filename}`;
     }
@@ -71,11 +71,17 @@ exports.updatePromotion = async (req, res) => {
       promotion.images = req.files.images.map(f => `/uploads/${f.filename}`);
     }
 
-    Object.assign(promotion, req.body);
-    await promotion.save();
+    // Update other fields
+    Object.keys(req.body).forEach(key => {
+      if (key !== 'image' && key !== 'images') {
+        promotion[key] = req.body[key];
+      }
+    });
 
+    await promotion.save();
     res.json({ data: formatPromotion(req, promotion) });
   } catch (err) {
+    console.error('Update promotion error:', err);
     res.status(500).json({ error: err.message });
   }
 };

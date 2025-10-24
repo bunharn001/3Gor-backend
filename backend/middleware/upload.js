@@ -1,32 +1,36 @@
-const multer = require('multer');
-const path = require('path');
+// ✅ UPDATE promotion - FIXED VERSION
+exports.updatePromotion = async (req, res) => {
+  try {
+    const promotion = await Promotion.findById(req.params.id);
+    if (!promotion) return res.status(404).json({ error: 'Not found' });
 
-// Define storage location and filename
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        // Ensure the 'uploads' directory exists in your root server directory
-        cb(null, 'uploads/'); 
-    },
-    filename: function (req, file, cb) {
-        // Use the original fieldname but append a timestamp to ensure uniqueness
-        cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+    // ✅ ONLY update image if new file uploaded
+    if (req.files?.image?.[0]) {
+      promotion.image = `/uploads/${req.files.image[0].filename}`;
     }
-});
-
-// Configure and EXPORT THE MULTER INSTANCE
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5MB
-    fileFilter: (req, file, cb) => {
-        // Allow only image file types
-        if (file.mimetype.startsWith('image/')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only image files are allowed!'), false);
-        }
+    
+    // ✅ ONLY update images if new files uploaded
+    if (req.files?.images?.length > 0) {
+      promotion.images = req.files.images.map(f => `/uploads/${f.filename}`);
     }
-}); 
-// IMPORTANT: Do NOT call .array() here!
 
-// Export the configured Multer instance (the object with .array, .single, etc., methods)
-module.exports = upload;
+    // ✅ Update other fields (excluding image/images which we handled above)
+    Object.keys(req.body).forEach(key => {
+      if (key !== 'image' && key !== 'images') {
+        promotion[key] = req.body[key];
+      }
+    });
+
+    await promotion.save();
+    
+    console.log(`✅ Updated promotion ${req.params.id}:`, {
+      hasImage: !!promotion.image,
+      imagesCount: promotion.images?.length || 0
+    });
+
+    res.json({ data: formatPromotion(req, promotion) });
+  } catch (err) {
+    console.error('❌ Update promotion error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};

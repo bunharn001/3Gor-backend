@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const connectDB = require('./config/database');
 const path = require('path'); 
+const fs = require('fs'); // Add this import
 
 // Load env vars
 dotenv.config();
@@ -25,6 +26,12 @@ const allowedOrigins = [
   "https://www.3gorinterior.com", // your GoDaddy domain (www)
   "https://3gorinterior.com" // your GoDaddy domain (non-www)
 ];
+// After app initialization, add:
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('✅ Created uploads directory');
+}
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -48,6 +55,9 @@ app.use('/api/products', require('./routes/products'));
 app.use('/api/promotions', require('./routes/promotions'));
 app.use('/api/portfolios', require('./routes/portfolios')); 
 app.use('/uploads', express.static('uploads'));
+
+// Make sure this line exists (should be BEFORE routes):
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
 // Root route

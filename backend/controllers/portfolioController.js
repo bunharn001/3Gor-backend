@@ -85,31 +85,64 @@ const createPortfolio = async (req, res) => {
 };
 
 // ================================
-// 📸 UPDATE PORTFOLIO
+// 📸 UPDATE PORTFOLIO - FIXED VERSION
 // ================================
 const updatePortfolio = async (req, res) => {
   try {
     const portfolio = await Portfolio.findById(req.params.id);
     if (!portfolio) return res.status(404).json({ error: "Not found" });
 
-    // 🖼️ update gallery
-    const gallery = req.files?.images
-      ? req.files.images.map((f) => path.join("uploads", f.filename))
-      : portfolio.images;
+    // ✅ Keep existing images by default
+    let gallery = portfolio.images || [];
 
-    const body = { ...req.body, images: gallery };
+    // ✅ ONLY update if new files uploaded
+    if (req.files?.images && req.files.images.length > 0) {
+      gallery = req.files.images.map((f) => path.join("uploads", f.filename));
+    }
 
-    ["features", "materials"].forEach((field) => {
-      if (typeof body[field] === "string") {
-        body[field] = body[field]
-          .split(",")
-          .map((v) => v.trim())
-          .filter(Boolean);
+    // ✅ Parse array fields properly
+    let features = portfolio.features || [];
+    let materials = portfolio.materials || [];
+
+    if (req.body.features) {
+      if (typeof req.body.features === "string") {
+        try {
+          features = JSON.parse(req.body.features);
+        } catch {
+          features = req.body.features.split(",").map((v) => v.trim()).filter(Boolean);
+        }
+      } else if (Array.isArray(req.body.features)) {
+        features = req.body.features;
       }
+    }
+
+    if (req.body.materials) {
+      if (typeof req.body.materials === "string") {
+        try {
+          materials = JSON.parse(req.body.materials);
+        } catch {
+          materials = req.body.materials.split(",").map((v) => v.trim()).filter(Boolean);
+        }
+      } else if (Array.isArray(req.body.materials)) {
+        materials = req.body.materials;
+      }
+    }
+
+    // ✅ Update portfolio
+    Object.assign(portfolio, {
+      ...req.body,
+      images: gallery,
+      features: features,
+      materials: materials,
     });
 
-    Object.assign(portfolio, body);
     await portfolio.save();
+
+    console.log(`✅ Updated portfolio ${req.params.id}:`, {
+      imagesCount: gallery.length,
+      featuresCount: features.length,
+      materialsCount: materials.length
+    });
 
     res.json({
       success: true,
@@ -119,7 +152,7 @@ const updatePortfolio = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Update portfolio error:", error);
+    console.error("❌ Update portfolio error:", error);
     res.status(500).json({ error: error.message });
   }
 };

@@ -100,7 +100,7 @@ const createProduct = async (req, res) => {
 };
 
 // ================================
-// 📦 UPDATE PRODUCT (with image uploads)
+// 📦 UPDATE PRODUCT - FIXED VERSION
 // ================================
 const updateProduct = async (req, res) => {
   try {
@@ -111,9 +111,11 @@ const updateProduct = async (req, res) => {
     if (!existing)
       return res.status(404).json({ success: false, message: "Product not found" });
 
+    // ✅ Keep existing images by default
     let mainImage = existing.image;
     let galleryImages = existing.images || [];
 
+    // ✅ ONLY update if new files uploaded
     if (req.files) {
       if (req.files.image && req.files.image[0]) {
         mainImage = path.join("uploads", req.files.image[0].filename);
@@ -123,25 +125,52 @@ const updateProduct = async (req, res) => {
       }
     }
 
+    // ✅ Parse features and specifications properly
+    let features = existing.features || [];
+    if (req.body.features) {
+      if (typeof req.body.features === 'string') {
+        try {
+          // Try parsing as JSON first
+          features = JSON.parse(req.body.features);
+        } catch {
+          // If not JSON, split by comma
+          features = req.body.features.split(",").map((f) => f.trim()).filter(Boolean);
+        }
+      } else if (Array.isArray(req.body.features)) {
+        features = req.body.features;
+      }
+    }
+
+    let specifications = existing.specifications || [];
+    if (req.body.specifications) {
+      if (typeof req.body.specifications === "string") {
+        try {
+          specifications = JSON.parse(req.body.specifications);
+        } catch (e) {
+          console.error("Failed to parse specifications:", e);
+        }
+      } else {
+        specifications = req.body.specifications;
+      }
+    }
+
     const updatedData = {
       ...req.body,
       image: mainImage,
       images: galleryImages,
-      features: req.body.features
-        ? Array.isArray(req.body.features)
-          ? req.body.features
-          : req.body.features.split(",").map((f) => f.trim())
-        : [],
-      specifications: req.body.specifications
-        ? typeof req.body.specifications === "string"
-          ? JSON.parse(req.body.specifications)
-          : req.body.specifications
-        : [],
+      features: features,
+      specifications: specifications,
     };
 
     const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updatedData, {
       new: true,
       runValidators: true,
+    });
+
+    console.log(`✅ Updated product ${req.params.id}:`, {
+      hasImage: !!updatedProduct.image,
+      imagesCount: updatedProduct.images?.length || 0,
+      featuresCount: updatedProduct.features?.length || 0
     });
 
     res.json({ success: true, data: updatedProduct });
