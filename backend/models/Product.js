@@ -33,12 +33,20 @@ const productSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+
+    // ✅ Add this new section
+    detailedFeatures: {
+      type: [String],
+      default: [],
+    },
+
     fullDescription: {
       type: String,
       default: '',
     },
+
     specifications: {
-      type: String, // ✅ final fix: just text
+      type: String,
       default: '',
     },
     image: {
