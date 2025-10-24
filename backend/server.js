@@ -77,7 +77,6 @@ console.log("🛣️ Registering routes...");
 app.use('/api/products', require('./routes/products'));
 app.use('/api/promotions', require('./routes/promotions'));
 app.use('/api/portfolios', require('./routes/portfolios'));
-app.use('/api/test', require('./routes/test-cloudinary'));
 
 
 // Root route
